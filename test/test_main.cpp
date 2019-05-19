@@ -1,3 +1,4 @@
+#include <formatpp/format.h>  // to check whether there are any multiply defined symbols
 #include <gtest/gtest.h>
 
 int main(int argc, char **argv) {

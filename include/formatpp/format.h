@@ -6,6 +6,9 @@
 #include <sstream>
 #include <algorithm>
 #include <memory>
+#include <iterator>
+#include <vector>
+#include <iostream>
 #include <type_traits>
 
 namespace formatpp {
@@ -763,7 +766,7 @@ format_params<Context, sizeof...(Args)> make_format_params(Args&&... args)
     return { std::forward<Args>(args)... };
 }
 
-int parse_index(const char *s, size_t &i)
+inline int parse_index(const char *s, size_t &i)
 {
     int index = -1;
     for (;; i++)

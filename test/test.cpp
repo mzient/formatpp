@@ -256,4 +256,6 @@ TEST(Format, Custom)
 {
     EXPECT_EQ(format_str("--{0}--", CustomType{4, 5}),
               "--4, 5--");
+
+    print("{0:.5e}", 1500.f);
 }
