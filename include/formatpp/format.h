@@ -5,7 +5,6 @@
 #include <cstring>
 #include <sstream>
 #include <iostream>
-#include <memory>
 #include <tuple>
 #include <type_traits>
 
@@ -738,7 +737,9 @@ struct default_formatter<T, FloatingPointType>
     template <typename Context>
     static void format(Context &ctx, const T &value, const format_options<T> &options)
     {
-        auto buf_size = std::max<size_t>(sizeof(T)*8 + 10, options.width+2);
+        auto buf_size = sizeof(T)*8 + 10;
+        if (options.width+2 > buf_size)
+            buf_size = options.width + 2;
         auto buf_lease = ctx.get_tmp_buffer(buf_size);
         char *buf = buf_lease.get();
         int i = 0;
