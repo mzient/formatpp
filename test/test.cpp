@@ -185,7 +185,7 @@ TEST(FormatParams, VariableLength)
 {
     int i = 2;
     float f = 5.5f;
-    format_params<string_output_context, (size_t)-1> params = { 1, 1.5, i, f, std::string("xyz"), "abc" };
+    auto params = make_format_params<string_output_context>(1, 1.5, i, f, std::string("xyz"), "abc");
     EXPECT_EQ(1, params[0].value<int>());
     EXPECT_EQ(1.5, params[1].value<double>());
     EXPECT_EQ(2, params[2].value<int&>());
@@ -234,6 +234,24 @@ TEST(Format, Braces)
     EXPECT_EQ(format_str("{{{1}{0}}}", 21, 123), "{12321}");;
 }
 
+TEST(TempBuffer, Alloc)
+{
+    tmp_buf_allocator alloc;
+    {
+        // static
+        auto m1 = alloc.allocate(alloc.static_buffer_size/2);
+        // dynamic
+        auto m2 = alloc.allocate(alloc.static_buffer_size*3/2);
+        // static
+        auto m3 = alloc.allocate(alloc.static_buffer_size/2);
+        EXPECT_EQ(m3.data, m1.data + alloc.static_buffer_size/2);
+
+        // destruction in stack order should guarantee proper deallocation
+    }
+    for (auto &a : alloc.allocs)
+        EXPECT_EQ(a.used, 0);
+}
+
 struct CustomType
 {
     int a, b;
@@ -256,6 +274,4 @@ TEST(Format, Custom)
 {
     EXPECT_EQ(format_str("--{0}--", CustomType{4, 5}),
               "--4, 5--");
-
-    print("{0:.5e}", 1500.f);
 }

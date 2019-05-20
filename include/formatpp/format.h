@@ -4,11 +4,9 @@
 #include <string>
 #include <cstring>
 #include <sstream>
-#include <algorithm>
-#include <memory>
-#include <iterator>
-#include <vector>
 #include <iostream>
+#include <memory>
+#include <tuple>
 #include <type_traits>
 
 namespace formatpp {
@@ -36,16 +34,6 @@ inline bool is_ascii_digit(char c)
 
 template <bool condition, typename T = void>
 using enable_if_t = typename std::enable_if<condition, T>::type;
-
-#if __cplusplus >= 201402L
-using std::make_unique;
-#else
-template <typename T, typename... Args>
-std::unique_ptr<T> make_unique(Args&&... args)
-{
-    return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
-}
-#endif
 
 class IntegralType;
 class FloatingPointType;
@@ -304,7 +292,7 @@ struct fp_format_options
 
 struct bool_format_options
 {
-    void parse(const char *options, size_t i)
+    void parse(const char *options, size_t &i)
     {
         while (char c = is_ascii_digit(options[i]))
         {
@@ -439,7 +427,16 @@ put(std::string &s, const StringLike &value, size_t max_len)
 
 inline void put(std::ostream &s, size_t n, char value)
 {
-    std::fill_n(std::ostream_iterator<char>(s), n, value);
+    const size_t max_blk = 256;
+    char tmp[max_blk];
+    for (size_t i = 0; i < n && i < 64; i++)
+        tmp[i] = value;
+    while (n > 0)
+    {
+        size_t blk = n < max_blk ? n : max_blk;
+        s.write(tmp, blk);
+        n -= blk;
+    }
 }
 
 inline void put(std::string &s, size_t n, char value)
@@ -447,16 +444,151 @@ inline void put(std::string &s, size_t n, char value)
     s.append(n, value);
 }
 
+template <typename T>
+struct bump_allocator
+{
+    bump_allocator() = default;
+    bump_allocator(T *ptr, size_t count) : data(ptr), total(count) {}
+
+    T *data = nullptr;
+    size_t total = 0;
+    size_t used = 0;
+
+    T *allocate(size_t count)
+    {
+        if (used + count > total)
+            return nullptr;
+        T *ret = data + used;
+        used += count;
+        return ret;
+    }
+
+    bool free(T *ptr, size_t count)
+    {
+        if (ptr + count == data + used)
+        {
+            used -= count;
+            return true;
+        }
+        else
+            return false;
+    }
+};
+
+struct tmp_buf_allocator
+{
+    static constexpr size_t static_buffer_size = 256;
+    char static_buf[static_buffer_size];
+    static constexpr size_t num_allocs = 24;
+    bump_allocator<char> allocs[num_allocs];
+    tmp_buf_allocator()
+    {
+        allocs[0] = { static_buf, sizeof(static_buf) };
+    }
+    ~tmp_buf_allocator()
+    {
+        for (int i = 1; i < num_allocs; i++)
+            delete[] allocs[i].data;
+    }
+
+    struct buffer_lease
+    {
+        buffer_lease(tmp_buf_allocator *owner, char *data, size_t count)
+        : owner(owner), data(data), count(count) {}
+        buffer_lease(const buffer_lease &) = delete;
+        buffer_lease(buffer_lease &&b)
+        {
+            owner = b.owner;
+            data = b.data;
+            count = b.count;
+            b.owner = nullptr;
+            b.data = nullptr;
+            b.count = 0;
+        }
+        ~buffer_lease()
+        {
+            release();
+        }
+
+        void release()
+        {
+            if (data)
+            {
+                owner->free(data, count);
+                data = nullptr;
+                count = 0;
+            }
+        }
+
+        buffer_lease &operator=(const buffer_lease &b) = delete;
+        buffer_lease &operator=(buffer_lease &&b)
+        {
+            release();
+            owner = b.owner;
+            data = b.data;
+            count = b.count;
+            b.owner = nullptr;
+            b.data = nullptr;
+            b.count = 0;
+            return *this;
+        }
+
+        tmp_buf_allocator *owner;
+        char *data;
+        size_t count;
+
+        char *get() const noexcept { return data; }
+        size_t size() const noexcept { return count; }
+    };
+    char *tail = static_buf;
+
+    buffer_lease allocate(size_t count)
+    {
+        return { this, allocate_raw(count), count };
+    }
+
+    char *allocate_raw(size_t count)
+    {
+        size_t prev_size = 0;
+        for (int i = 0; i < num_allocs; i++)
+        {
+            if (allocs[i].data)
+            {
+                if (char *mem = allocs[i].allocate(count))
+                    return mem;
+            }
+            else
+            {
+                size_t capacity = prev_size << 1;
+                while (count > capacity)
+                    capacity <<= 1;
+                allocs[i] = { new char[capacity], capacity };
+                return allocs[i].allocate(count);
+            }
+            prev_size = allocs[i].total;
+        }
+        throw std::bad_alloc();
+    }
+
+    void free(char *mem, size_t count)
+    {
+        for (int i = num_allocs - 1; i >= 0; i--)
+            if (allocs[i].free(mem, count))
+                break;
+    }
+};
+
 template <typename Output>
 struct output_context
 {
     output_context(Output output) : output(output) {}
 
-    using buf_lease = std::unique_ptr<char[]>;
+    using buf_lease = tmp_buf_allocator::buffer_lease;
+    tmp_buf_allocator alloc;
 
-    buf_lease get_temp_buffer(size_t count)
+    buf_lease get_tmp_buffer(size_t count)
     {
-        return buf_lease(new char[count]);
+        return alloc.allocate(count);
     }
 
     typename std::add_lvalue_reference<Output>::type out()
@@ -468,6 +600,7 @@ struct output_context
 };
 
 using string_output_context = output_context<std::string &>;
+using ostream_output_context = output_context<std::ostream &>;
 
 template <typename T>
 struct ios_formatter
@@ -518,8 +651,12 @@ struct default_formatter<T, IntegralType>
     template <typename Context>
     static void format(Context &ctx, const T &value, const format_options<T> &options)
     {
-        auto buf_size = std::max<size_t>(sizeof(T)*8 + 2, options.width+2);
-        auto buf_lease = ctx.get_temp_buffer(buf_size);
+        size_t buf_size = sizeof(T)*8 + 2;
+        if (options.width + 2 > buf_size)
+            buf_size = options.width + 2;
+        if (options.precision + 2 > buf_size)
+            buf_size = options.precision + 2;
+        auto buf_lease = ctx.get_tmp_buffer(buf_size);
         char *buf = buf_lease.get();
         char *rbuf = buf + buf_size - 1;
         *rbuf = 0;
@@ -602,7 +739,7 @@ struct default_formatter<T, FloatingPointType>
     static void format(Context &ctx, const T &value, const format_options<T> &options)
     {
         auto buf_size = std::max<size_t>(sizeof(T)*8 + 10, options.width+2);
-        auto buf_lease = ctx.get_temp_buffer(buf_size);
+        auto buf_lease = ctx.get_tmp_buffer(buf_size);
         char *buf = buf_lease.get();
         int i = 0;
         char format_str[16] = {0};
@@ -630,7 +767,15 @@ struct default_formatter<T, FloatingPointType>
             break;
         }
         format_str[i++] = 0;
-        snprintf(buf, buf_size, format_str, value);
+        int n = snprintf(buf, buf_size, format_str, value);
+        if (n > buf_size)
+        {
+            buf_size = n + 1;
+            buf_lease.release();
+            buf_lease = ctx.get_tmp_buffer(buf_size);
+            buf = buf_lease.get();
+            n = snprintf(buf, buf_size, format_str, value);
+        }
         put(ctx.out(), buf);
     }
 };
@@ -710,58 +855,67 @@ struct format_param : format_param_base<Context>
     }
 };
 
-template <typename Context, size_t N>
+template <size_t index, typename T, typename...Args>
+void get_tuple_addresses(T *array[], std::tuple<Args...> &tuple,
+                        std::integral_constant<size_t, index>, std::integral_constant<size_t, 1>)
+{
+    array[index] = &std::get<index>(tuple);
+}
+
+template <size_t begin, size_t count, typename T, typename...Args>
+void get_tuple_addresses(T *array[], std::tuple<Args...> &tuple,
+                        std::integral_constant<size_t, begin>, std::integral_constant<size_t, count>)
+{
+    constexpr size_t n1 = count/2;
+    constexpr size_t n2 = count - n1;
+    get_tuple_addresses(array, tuple, std::integral_constant<size_t, begin>(), std::integral_constant<size_t, n1>());
+    get_tuple_addresses(array, tuple, std::integral_constant<size_t, begin + n1>(), std::integral_constant<size_t, n2>());
+}
+
+template <typename T, typename...Args>
+void get_tuple_addresses(T *array[], std::tuple<Args...> &tuple)
+{
+    get_tuple_addresses(array, tuple, std::integral_constant<size_t, 0>(), std::integral_constant<size_t, sizeof...(Args)>());
+}
+
+
+template <typename Context, typename... Args>
 class format_params
 {
 public:
     format_params() = default;
+    static constexpr size_t N = sizeof...(Args);
 
-    template <typename... Args>
     format_params(Args&&... args)
-    : params{ make_unique<format_param<Context, Args>>(std::forward<Args>(args))... }
+    : storage(format_param<Context, Args>(std::forward<Args>(args))...)
     {
-        static_assert(sizeof...(Args) == N, "Invalid number of arguments");
+        get_tuple_addresses(params, storage);
     }
 
     static constexpr size_t size() { return N; }
 
-    format_param_base<Context> &operator[](size_t index) const {
+    format_param_base<Context> &operator[](size_t index) const noexcept {
         return *params[index];
     }
+
 private:
-    std::unique_ptr<format_param_base<Context>> params[N];
+    format_param_base<Context> *params[N];
+    std::tuple<format_param<Context, Args>...> storage;
 };
 
 template <typename Context>
-class format_params<Context, (size_t)-1>
+class format_params<Context>
 {
 public:
-    format_params() = default;
-
-    template <typename... Args>
-    format_params(Args&&... args)
-    {
-        size_t N = sizeof...(Args);
-        std::unique_ptr<format_param_base<Context>> params[] = {
-            make_unique<format_param<Context, Args>>(std::forward<Args>(args))...
-        };
-        this->params.reserve(N);
-        for (auto &p : params)
-            this->params.push_back(std::move(p));
-    }
-
-    size_t size() const { return params.size(); }
+    static constexpr size_t size() { return 0; }
 
     format_param_base<Context> &operator[](size_t index) const {
-        return *params[index];
+        throw std::logic_error("Trying to get a value from an empty argument list");
     }
-private:
-
-    std::vector<std::unique_ptr<format_param_base<Context>>> params;
 };
 
 template <typename Context, typename... Args>
-format_params<Context, sizeof...(Args)> make_format_params(Args&&... args)
+format_params<Context, Args...> make_format_params(Args&&... args)
 {
     return { std::forward<Args>(args)... };
 }
@@ -787,8 +941,8 @@ inline int parse_index(const char *s, size_t &i)
     return index;
 }
 
-template <typename Context, typename FormatString, size_t N>
-void vformat(Context &ctx, const FormatString &format, const format_params<Context, N> &params)
+template <typename Context, typename FormatString, typename... Args>
+void vformat(Context &ctx, const FormatString &format, const format_params<Context, Args...> &params)
 {
     size_t len = string_length(format);
     const char *s = c_str(format);
@@ -880,6 +1034,13 @@ template <typename FormatString, typename... Args>
 void print(const FormatString &format_string, Args&&... args)
 {
     format_to(std::cout, format_string, std::forward<Args>(args)...);
+}
+
+template <typename FormatString, typename... Args>
+void vprint(const FormatString &format_string, const format_params<ostream_output_context, Args...> &params)
+{
+    ostream_output_context ctx(std::cout);
+    vformat(ctx, format_string, params);
 }
 
 } // formatpp
