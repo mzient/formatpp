@@ -5,6 +5,7 @@
 #include <cstring>
 #include <sstream>
 #include <iostream>
+#include <cassert>
 #include <tuple>
 #include <type_traits>
 
@@ -486,7 +487,7 @@ struct tmp_buf_allocator
     }
     ~tmp_buf_allocator()
     {
-        for (int i = 1; i < num_allocs; i++)
+        for (size_t i = 1; i < num_allocs; i++)
             delete[] allocs[i].data;
     }
 
@@ -549,7 +550,7 @@ struct tmp_buf_allocator
     char *allocate_raw(size_t count)
     {
         size_t prev_size = 0;
-        for (int i = 0; i < num_allocs; i++)
+        for (size_t i = 0; i < num_allocs; i++)
         {
             if (allocs[i].data)
             {
@@ -650,7 +651,7 @@ struct default_formatter<T, IntegralType>
     template <typename Context>
     static void format(Context &ctx, const T &value, const format_options<T> &options)
     {
-        size_t buf_size = sizeof(T)*8 + 2;
+        int buf_size = sizeof(T)*8 + 2;
         if (options.width + 2 > buf_size)
             buf_size = options.width + 2;
         if (options.precision + 2 > buf_size)
@@ -737,7 +738,7 @@ struct default_formatter<T, FloatingPointType>
     template <typename Context>
     static void format(Context &ctx, const T &value, const format_options<T> &options)
     {
-        auto buf_size = sizeof(T)*8 + 10;
+        int buf_size = sizeof(T)*8 + 10;
         if (options.width+2 > buf_size)
             buf_size = options.width + 2;
         auto buf_lease = ctx.get_tmp_buffer(buf_size);
@@ -788,7 +789,7 @@ public:
     template <typename Context>
     static void format(Context &ctx, const StringLike &value, const format_options<StringLike> &options)
     {
-        auto len = string_length(value);
+        int len = string_length(value);
         if (options.precision >= 0 && options.precision < len)
             len = options.precision;
         if (len < options.width)
@@ -799,25 +800,6 @@ public:
 
 template <typename T>
 class formatter : public default_formatter<T> {};
-
-/*template <typename T>
-struct format_options_wrapper;
-
-struct format_options_wrapper_base
-{
-    virtual ~format_options_wrapper_base() = default;
-    template <typename T>
-    format_options<T> *get()
-    {
-        return dynamic_cast<format_options_wrapper<T>*>(this);
-    }
-};
-
-template <typename T>
-struct format_options_wrapper : format_options_wrapper_base, format_options<T>
-{
-    using format_options<T>::format_options;
-};*/
 
 template <typename Context, typename T>
 struct format_param;
@@ -895,7 +877,8 @@ public:
 
     static constexpr size_t size() { return N; }
 
-    format_param_base<Context> &operator[](size_t index) const noexcept {
+    format_param_base<Context> &operator[](size_t index) const noexcept
+    {
         return *params[index];
     }
 
@@ -910,7 +893,8 @@ class format_params<Context>
 public:
     static constexpr size_t size() { return 0; }
 
-    format_param_base<Context> &operator[](size_t index) const {
+    format_param_base<Context> &operator[](size_t index) const
+    {
         throw std::logic_error("Trying to get a value from an empty argument list");
     }
 };
@@ -948,14 +932,7 @@ void vformat(Context &ctx, const FormatString &format, const format_params<Conte
     size_t len = string_length(format);
     const char *s = c_str(format);
 
-    struct text_chunk
-    {
-        const char *start;
-        size_t length;
-    };
-
     int last_idx = -1;
-
     size_t start = 0;
 
     for (size_t i = 0; i < len; i++)
@@ -972,11 +949,12 @@ void vformat(Context &ctx, const FormatString &format, const format_params<Conte
             {
                 put(ctx.out(), s + start, i-1 - start);
                 int index = ++last_idx;
+                int N = params.size();
                 int explicit_idx = parse_index(s, i);
                 if (explicit_idx >= 0)
                     index = last_idx = explicit_idx;
 
-                if (index < 0 || index >= params.size())
+                if (index < 0 || index >= N)
                     throw std::out_of_range("Argument index out of range: " + std::to_string(index));
 
                 if (s[i] == ':')
