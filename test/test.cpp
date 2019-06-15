@@ -1,5 +1,7 @@
-#include <gtest/gtest.h>
 #include <formatpp/format.h>
+#include <gtest/gtest.h>
+#include <chrono>
+#include <cmath>
 
 using namespace formatpp;
 
@@ -134,14 +136,53 @@ TEST(Formatter, Float)
     formatter<float>().format(ctx, -2.5, "");
     EXPECT_EQ(str, "-2.5");
     str = "";
-    formatter<float>().format(ctx, 2.5, "+");
+    formatter<float>().format(ctx, 2.5f, "+");
     EXPECT_EQ(str, "+2.5");
     str = "";
-    formatter<float>().format(ctx, 2.51234, "+.4");
+    formatter<float>().format(ctx, 1.25f, "f");
+    EXPECT_EQ(str, "1.250000");
+    str = "";
+    formatter<float>().format(ctx, 2.51234f, "+.4");
     EXPECT_EQ(str, "+2.512");
     str = "";
-    formatter<float>().format(ctx, 2.51234, "+.4f");
-    EXPECT_EQ(str, "+2.5123");
+    formatter<float>().format(ctx, 2.51254f, "+.4");
+    EXPECT_EQ(str, "+2.513");
+    str = "";
+    formatter<float>().format(ctx, 12.3456f, "+.2f");
+    EXPECT_EQ(str, "+12.35");
+    str = "";
+    formatter<float>().format(ctx, 0.1f, {});
+    EXPECT_EQ(str, "0.1");
+    str = "";
+    formatter<float>().format(ctx, 0.099999f, ".4g");
+    EXPECT_EQ(str, "0.1");
+    str = "";
+    formatter<float>().format(ctx, 99.999f, ".4g");
+    EXPECT_EQ(str, "100");
+    str = "";
+    formatter<float>().format(ctx, 0.9999e+10f, ".4g");
+    EXPECT_EQ(str, "9.999e+9");
+    str = "";
+    formatter<float>().format(ctx, 0.99999e+10f, ".4g");
+    EXPECT_EQ(str, "1e+10");
+    str = "";
+    formatter<float>().format(ctx, 0.99999e+10f, ".3E");
+    EXPECT_EQ(str, "1.000E+10");
+    str = "";
+    formatter<float>().format(ctx, 0.999e+10f, ".3E");
+    EXPECT_EQ(str, "9.990E+9");
+    str = "";
+    formatter<float>().format(ctx, -0.9999f, ".3E");
+    EXPECT_EQ(str, "-1.000E+0");
+    str = "";
+    formatter<float>().format(ctx, 1.9999f, ".3E");
+    EXPECT_EQ(str, "2.000E+0");
+    str = "";
+    formatter<float>().format(ctx, 1.0f/999, "");
+    EXPECT_EQ(str, "0.001001");
+    str = "";
+    formatter<float>().format(ctx, 1.0f/999, "f");
+    EXPECT_EQ(str, "0.001001");
     str = "";
 }
 
@@ -274,4 +315,68 @@ TEST(Format, Custom)
 {
     EXPECT_EQ(format_str("--{0}--", CustomType{4, 5}),
               "--4, 5--");
+}
+
+using perf_clock = std::chrono::high_resolution_clock;
+
+template <typename rep, typename period>
+double ns(std::chrono::duration<rep, period> t)
+{
+    return std::chrono::duration_cast<std::chrono::duration<double, std::nano>>(t).count();
+}
+
+const char *strdata = "asdf";
+
+TEST(Format, Perf)
+{
+    const int outer_N = 100;
+    const int N = 1000;
+    const int total_N = outer_N * N;
+    perf_clock::time_point start, end;
+
+    for (int i = 0; i < 100; i++)
+    {
+        char buf[64];
+        sprintf(buf, "%i %g %s", i, 1.0f/i, "asdf");
+        (void)std::string(buf);
+    }
+    for (int i = 0; i < 100; i++)
+    {
+        (void)format_str("{} {} {}", i, 1.0f/i, "asdf");
+    }
+
+    perf_clock::duration time_format(0), time_sprintf(0), time_stream(0);
+
+    for (int i = 0; i < outer_N; i++)
+    {
+        start = perf_clock::now();
+        for (int i = 0; i < N; i++)
+        {
+            (void)format_str("{} {} {}", i, 1.0f/i, strdata);
+        }
+        end = perf_clock::now();
+        time_format += end - start;
+        start = perf_clock::now();
+        for (int i = 0; i < N; i++)
+        {
+            char buf[64];
+            int n = snprintf(buf, 64, "%i %g %s", i, 1.0f/i, strdata);
+            (void)std::string(buf, n);
+        }
+        end = perf_clock::now();
+        time_sprintf += end - start;
+
+        start = perf_clock::now();
+        for (int i = 0; i < N; i++)
+        {
+            std::stringstream ss;
+            ss << i << " " << 1.0f/i << " " << strdata;
+            (void)ss.str();
+        }
+        end = perf_clock::now();
+        time_stream += end - start;
+    }
+    std::cout << "format_str (dynamic buffer): " << std::round(ns(time_format) / total_N) << "ns" << std::endl;
+    std::cout << "snprintf (fixed buffer + string(buf)): " << std::round(ns(time_sprintf) / total_N) << "ns" << std::endl;
+    std::cout << "stringstream: " << std::round(ns(time_stream) / total_N) << "ns" << std::endl;
 }

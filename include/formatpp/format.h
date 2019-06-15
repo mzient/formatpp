@@ -6,10 +6,157 @@
 #include <sstream>
 #include <iostream>
 #include <cassert>
+#include <climits>
+#include <cmath>
 #include <tuple>
 #include <type_traits>
 
 namespace formatpp {
+namespace detail {
+
+template <typename T>
+T max(const T &a, const T &b)
+{
+    return a < b ? b : a;
+}
+
+template <typename T>
+T min(const T &a, const T &b)
+{
+    return b < a ? b : a;
+}
+
+namespace {
+constexpr int max_digits_31[256] = {
+0, 0, 31, 19, 15, 13, 11, 11, 10, 9, 9, 8, 8, 8, 8, 7, 7, 7, 7, 7, 7, 7, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
+6, 6, 6, 6, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 3, 3, 3, 3, 3, 3, 3, 3,
+3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3
+};
+
+constexpr int max_digits_63[256] = {
+0, 0, 63, 39, 31, 27, 24, 22, 21, 19, 18, 18, 17, 17, 16, 16, 15, 15, 15, 14, 14, 14, 14, 13, 13, 13, 13, 13, 13, 12, 12, 12,
+12, 12, 12, 12, 12, 12, 12, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
+10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9,
+9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9,
+9, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8,
+8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8,
+8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8,
+8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
+};
+} // {}
+
+template <typename T>
+int max_precision(uint8_t radix) noexcept;
+
+template<>
+inline int max_precision<double>(uint8_t radix) noexcept
+{
+    switch (radix) {
+    case 2:
+        return 53;
+    case 4:
+        return 26;
+    case 8:
+        return 17;
+    case 10:
+        return 16;
+    case 16:
+        return 13;
+    default:
+        return 53 / std::log2(radix);
+    }
+}
+template<>
+inline int max_precision<float>(uint8_t radix) noexcept
+{
+    switch (radix) {
+    case 2:
+        return 23;
+    case 4:
+        return 11;
+    case 8:
+        return 7;
+    case 10:
+        return 7;
+    case 16:
+        return 6;
+    default:
+        return 23 / std::log2(radix);
+    }
+}
+
+} // detail
+
+
+template <typename Char>
+class char_buf
+{
+public:
+    using char_t = Char;
+
+    char_buf() = default;
+    char_buf(char_t *buffer, size_t capacity) : buf(buffer), cap(capacity)
+    {
+    }
+
+    void append(const char_t *str, size_t count)
+    {
+        if (len + count >= cap)
+            throw std::out_of_range("char_buf capacity exceeded");
+        for (size_t i = 0; i < count; i++)
+            buf[len + i] = str[i];
+        len += count;
+        buf[len] = 0; // null-terminate
+    }
+
+    void append(const char_t *str)
+    {
+        while (char_t c = *str++)
+        {
+            if (len + 1 >= cap)
+                throw std::out_of_range("char_buf capacity exceeded");
+            buf[len++] = c;
+        }
+        buf[len] = 0;
+    }
+
+    void append(size_t count, char_t value)
+    {
+        if (len + count >= cap)
+            throw std::out_of_range("char_buf capacity exceeded");
+        for (size_t i = 0; i < count; i++)
+            buf[len + i] = value;
+        len += count;
+
+        buf[len] = 0;
+    }
+
+    using iterator = char_t*;
+    using const_iterator = const char_t*;
+    iterator begin() { return data(); }
+    const_iterator cbegin() const { return data(); }
+    const_iterator begin() const { return data(); }
+    iterator end() { return data() + length(); }
+    const_iterator cend() const { return data() + length(); }
+    const_iterator end() const { return data() + length(); }
+
+    char_t *data() noexcept { return buf; }
+    const char_t *data() const noexcept { return buf; }
+    const char_t *c_str() const noexcept { return buf; }
+    size_t length() const noexcept { return len; }
+    size_t size() const noexcept { return len; }
+    size_t capacity() const noexcept { return cap; }
+
+private:
+    char_t *buf = nullptr;
+    size_t len = 0;
+    size_t cap = 0;
+};
 
 using std::size_t;
 using std::ptrdiff_t;
@@ -21,7 +168,9 @@ enum class fp_format_mode
     /// Always use positional notation, even for very large or small numbers
     positional,
     /// Always use scientific (exponential) notation
-    scientific
+    scientific,
+    /// Use binary representation
+    binary_repr
 };
 
 /// @brief Tells if `c` is ASCII digit.
@@ -41,6 +190,9 @@ class PointerType;
 class StringType;
 class CharType;
 class BooleanType;
+
+template <typename T>
+class formatter;
 
 template <typename T>
 enable_if_t<std::is_integral<T>::value, IntegralType> TypeCategory(const T &);
@@ -63,6 +215,9 @@ template <typename Char>
 size_t string_length(const std::basic_string<Char> &s) { return s.length(); }
 
 inline size_t string_length(const char *s) { return std::strlen(s); }
+
+template <typename Char>
+inline size_t string_length(const char_buf<Char> &s) { return s.length(); }
 
 void TypeCategory(...);
 
@@ -162,7 +317,7 @@ struct integer_format_options
     }
 
     int width = -1;
-    int radix = 10;
+    uint8_t radix = 10;
     int precision = -1;
     char leading_sign = 0;
     bool is_signed = true;
@@ -269,15 +424,22 @@ struct fp_format_options
             fp_mode = fp_format_mode::scientific;
             uppercase = std::isupper(c);
             break;
+        case 'x':
+        case 'X':
+            uppercase = std::isupper(c);
+            digits = uppercase ? uppercase_digits() : lowercase_digits();
+            fp_mode = fp_format_mode::binary_repr;
+            break;
         }
     }
 
     int width = -1;
     int precision = -1;
-    int radix = 10;
+    uint8_t radix = 10;
     char leading_sign = 0;
     char leading_char = ' ';
     bool uppercase = false;
+    bool binary_repr = false;
     fp_format_mode fp_mode = fp_format_mode::automatic;
     static const char *lowercase_digits()
     {
@@ -386,6 +548,18 @@ struct format_options : default_format_options<T>
     format_options(const char *options) { size_t i = 0; this->parse(options, i); }
 };
 
+
+template <typename char_t>
+inline const char_t *c_str(const std::basic_string<char_t> &s) { return s.c_str(); }
+inline const char *c_str(const char *s) { return s; }
+
+template <typename char_t>
+inline const char_t *c_str(const char_buf<char_t> &buf)
+{
+    return buf.c_str();
+}
+
+
 template <typename StringLike>
 inline enable_if_t<is_string_type<StringLike>::value> put(std::ostream &s, const StringLike &value)
 {
@@ -398,31 +572,36 @@ inline enable_if_t<is_string_type<StringLike>::value> put(std::string &s, const 
     s.append(value);
 }
 
+template <typename char_t, typename StringLike>
+inline enable_if_t<is_string_type<StringLike>::value> put(char_buf<char_t> &s, const StringLike &value)
+{
+    s.append(c_str(value), string_length(value));
+}
+
 inline void put(std::ostream &s, char c)
 {
     s.put(c);
 }
 
-inline void append(std::string &s, char c)
-{
-    s += c;
-}
-
-inline const char *c_str(const std::string &s) { return s.c_str(); }
-inline const char *c_str(const char *s) { return s; }
-
 template <typename StringLike>
 inline enable_if_t<is_string_type<StringLike>::value>
 put(std::ostream &s, const StringLike &value, size_t max_len)
 {
-    s.write(c_str(value), std::min(max_len, string_length(value)));
+    s.write(c_str(value), detail::min(max_len, string_length(value)));
 }
 
 template <typename StringLike>
 inline enable_if_t<is_string_type<StringLike>::value>
 put(std::string &s, const StringLike &value, size_t max_len)
 {
-    s.append(c_str(value), std::min(max_len, string_length(value)));
+    s.append(c_str(value), detail::min(max_len, string_length(value)));
+}
+
+template <typename char_t, typename StringLike>
+inline enable_if_t<is_string_type<StringLike>::value>
+put(char_buf<char_t> &s, const StringLike &value, size_t max_len)
+{
+    s.append(c_str(value), detail::min(max_len, string_length(value)));
 }
 
 inline void put(std::ostream &s, size_t n, char value)
@@ -433,15 +612,23 @@ inline void put(std::ostream &s, size_t n, char value)
         tmp[i] = value;
     while (n > 0)
     {
-        size_t blk = n < max_blk ? n : max_blk;
+        size_t blk = detail::min(n, max_blk);
         s.write(tmp, blk);
         n -= blk;
     }
 }
 
+
+
 inline void put(std::string &s, size_t n, char value)
 {
     s.append(n, value);
+}
+
+template <typename char_t>
+inline void put(char_buf<char_t> &buf, size_t n, char value)
+{
+    buf.append(n, value);
 }
 
 template <typename T>
@@ -651,7 +838,13 @@ struct default_formatter<T, IntegralType>
     template <typename Context>
     static void format(Context &ctx, const T &value, const format_options<T> &options)
     {
-        int buf_size = sizeof(T)*8 + 2;
+        format_fixed(ctx, value, options);
+    }
+
+    template <typename Context>
+    static void format_fixed(Context &ctx, const T &value, const format_options<T> &options, int fixed_point = 0, bool trim_trailing_zeros = false)
+    {
+        int buf_size = sizeof(T)*8 + 3;
         if (options.width + 2 > buf_size)
             buf_size = options.width + 2;
         if (options.precision + 2 > buf_size)
@@ -676,47 +869,26 @@ struct default_formatter<T, IntegralType>
         switch (options.radix)
         {
         case 2:
-            while (x)
-            {
-                rbuf[-++n] = '0' + (x&1);
-                x >>= 1;
-            }
+            write_fixed<2>(rbuf, x, n, options.radix, options.digits, fixed_point, trim_trailing_zeros);
             break;
         case 8:
-            while (x)
-            {
-                rbuf[-++n] = '0' + (x&7);
-                x >>= 3;
-            }
+            write_fixed<8>(rbuf, x, n, options.radix, options.digits, fixed_point, trim_trailing_zeros);
             break;
         case 10:  // use compiler's optimization for division by 10
-            while (x)
-            {
-                auto d = x % 10;
-                x /= 10;
-                rbuf[-++n] = options.digits[d];
-            }
+            write_fixed<10>(rbuf, x, n, options.radix, options.digits, fixed_point, trim_trailing_zeros);
+            break;
         case 16:
-            while (x)
-            {
-                rbuf[-++n] = options.digits[x&15];
-                x >>= 4;
-            }
+            write_fixed<16>(rbuf, x, n, options.radix, options.digits, fixed_point, trim_trailing_zeros);
             break;
         default:
-            while (x)
-            {
-                auto d = x % options.radix;
-                x /= options.radix;
-                rbuf[-++n] = options.digits[d];
-            }
+            write_fixed<0>(rbuf, x, n, options.radix, options.digits, fixed_point, trim_trailing_zeros);
             break;
         }
 
         while (n < options.precision)
             rbuf[-++n] = options.digits[0];
 
-        if (!n && options.precision != 0)
+        if (options.precision != 0 && (rbuf[-n] == '.' || rbuf[-n] == 0))
             rbuf[-++n] = options.digits[0];
         int space_for_sign = is_negative || options.leading_sign;
         if (options.leading_char != ' ')
@@ -730,56 +902,278 @@ struct default_formatter<T, IntegralType>
             rbuf[-++n] = ' ';
         put(ctx.out(), rbuf-n);
     }
+
+private:
+    template <uint8_t static_radix>
+    static void write_fixed(char *rbuf, typename std::make_unsigned<T>::type x, int &n,
+                            uint8_t dynamic_radix, const char *digits,
+                            int fixed_point, bool &trim_trailing_zeros)
+    {
+        const unsigned radix = static_radix ? static_radix : dynamic_radix;
+        int trimmed = 0;
+        while (n + trimmed < fixed_point)
+        {
+            unsigned digit = x % radix;
+            if (digit || !trim_trailing_zeros)
+            {
+                rbuf[-++n] = digits[digit];
+                trim_trailing_zeros = false;
+            }
+            else
+                trimmed++;
+            x /= radix;
+        }
+        if (fixed_point > 0 && !trim_trailing_zeros)
+            rbuf[-++n] = '.';
+        while (x)
+        {
+            unsigned digit = x % radix;
+            x /= radix;
+            rbuf[-++n] = digits[digit];
+        }
+    }
 };
 
 template <typename T>
 struct default_formatter<T, FloatingPointType>
 {
+    static T lo(T value, T eps) {
+        return std::floor(value / eps) * eps;
+    }
+    static T hi(T value, T eps) {
+        return std::ceil(value / eps) * eps;
+    }
+
     template <typename Context>
     static void format(Context &ctx, const T &value, const format_options<T> &options)
     {
-        int buf_size = sizeof(T)*8 + 10;
-        if (options.width+2 > buf_size)
-            buf_size = options.width + 2;
-        auto buf_lease = ctx.get_tmp_buffer(buf_size);
-        char *buf = buf_lease.get();
-        int i = 0;
-        char format_str[16] = {0};
-        format_str[i++] = '%';
-
-        if (options.leading_sign)
-            format_str[i++] = options.leading_sign;
-        if (options.leading_char == '0')
-            format_str[i++] = '0';
-        if (options.width >= 0)
-            i+=snprintf(format_str + i, sizeof(format_str) - i, "%i", options.width);
-        if (options.precision >= 0)
-            i+=snprintf(format_str + i, sizeof(format_str) - i, ".%i", options.precision);
-
         switch (options.fp_mode)
         {
         case fp_format_mode::automatic:
-            format_str[i++] = options.uppercase ? 'G' : 'g';
+            automatic(ctx, value, options);
             break;
         case fp_format_mode::positional:
-            format_str[i++] = 'f';
+            positional(ctx, value, options);
             break;
         case fp_format_mode::scientific:
-            format_str[i++] = options.uppercase ? 'E' : 'e';
+            scientific(ctx, value, options);
+            break;
+        case fp_format_mode::binary_repr:
+            binary_repr(ctx, value, options);
             break;
         }
-        format_str[i++] = 0;
-        int n = snprintf(buf, buf_size, format_str, value);
-        if (n > buf_size)
-        {
-            buf_size = n + 1;
-            buf_lease.release();
-            buf_lease = ctx.get_tmp_buffer(buf_size);
-            buf = buf_lease.get();
-            n = snprintf(buf, buf_size, format_str, value);
-        }
-        put(ctx.out(), buf);
     }
+
+    template <typename Context>
+    static bool format_special(Context &ctx, const T &value, const format_options<T> &options)
+    {
+        if (std::isinf(value))
+        {
+            int l = value < 0 || options.leading_sign ? 4 : 3;
+            const char *symbol = value < 0 ? "-inf" : options.leading_sign ? "+inf" : "inf";
+            if (options.width > l)
+                put(ctx.out(), ' ', options.width - l);
+            put(ctx.out(), symbol, l);
+            return true;
+        }
+        else if (std::isnan(value))
+        {
+            if (options.width > 3)
+                put(ctx.out(), ' ', options.width - 3);
+            put(ctx.out(), "nan");
+            return true;
+        }
+
+        return false;
+    }
+
+    static std::pair<T, int> round_value(T value, const format_options<T> &options, bool fractional_digits)
+    {
+        if (value < 0)
+        {
+            auto tmp = round_value(-value, options, fractional_digits);
+            return { -tmp.first, tmp.second };
+        }
+
+        int e = exponent(value, options.radix);
+        int precision = options.precision >= 0 ? options.precision : 6;
+        T m = powi(options.radix, fractional_digits ? precision : precision-e-1);
+        T sig, rem;
+        rem = std::modf(value*m, &sig);
+        if (rem > 0.5)
+            sig++;
+        value = sig / m;
+        if (value >= powi(options.radix, e+1))
+            e++;
+
+        return { value, e };
+    }
+
+    template <typename Context>
+    static void automatic(Context &ctx, T value, const format_options<T> &options)
+    {
+        if (format_special(ctx, value, options))
+            return;
+
+        int e;
+        std::tie(value, e) = round_value(value, options, false);
+
+        int width = options.width > 0 ? options.width : options.precision > 0 ? options.precision : 6;
+        if (abs(e) > width)
+            scientific(ctx, value, e, options, true);
+        else
+            positional(ctx, value, e, options, true);
+    }
+    template <typename Context>
+    static void positional(Context &ctx, T value, const format_options<T> &options)
+    {
+        if (format_special(ctx, value, options))
+            return;
+        int e;
+        std::tie(value, e) = round_value(value, options, true);
+        positional(ctx, value, e, options, false);
+    }
+    template <typename Context>
+    static void scientific(Context &ctx, T value, const format_options<T> &options)
+    {
+        if (format_special(ctx, value, options))
+            return;
+        int e;
+        std::tie(value, e) = round_value(value, options, false);
+        scientific(ctx, value, e, options, false);
+    }
+    template <typename U = T>
+    static U powi(unsigned base, int e) {
+        if (e < 0)
+            return 1.0 / powi<U>(base, -e);
+
+        U result = 1;
+        U tmp = base;
+        while (e > 0) {
+            if (e&1)
+                result *= tmp;
+            tmp *= tmp;
+            e >>= 1;
+        }
+        return result;
+    }
+
+    template <typename IntegralRepr, typename Context>
+    static void positional_impl(Context &ctx, T value, int exponent, const format_options<T> &options, int digits, bool is_auto)
+    {
+        int precision = options.precision >= 0 ? options.precision : 6;
+        int shift = is_auto ? digits - exponent - 1 : precision;
+        T vm = value * powi(options.radix, shift);
+        IntegralRepr ival = std::trunc(vm);
+
+        format_options<IntegralRepr> iopt;
+        iopt.width = options.width;
+        iopt.radix = options.radix;
+        iopt.leading_sign = options.leading_sign;
+        formatter<IntegralRepr>::format_fixed(ctx, ival, iopt, shift, is_auto);
+    }
+
+    template <typename Context>
+    static void positional(Context &ctx, T value, int exponent, const format_options<T> &options, bool is_auto)
+    {
+        int precision = options.precision >= 0 ? options.precision : 6;
+
+        int digits = is_auto ? precision : std::max(exponent, 0) + precision + 1;
+
+        const int max_digits_31 = detail::max_digits_31[options.radix];
+        const int max_digits_63 = detail::max_digits_63[options.radix];
+        if (digits <= max_digits_31)
+            positional_impl<int>(ctx, value, exponent, options, digits, is_auto);
+        else if (digits <= max_digits_63)
+            positional_impl<int64_t>(ctx, value, exponent, options, digits, is_auto);
+        else
+        {
+            auto opt = options;
+            int point = exponent < max_digits_63 || (!is_auto && options.precision > 0);
+            int zeros = is_auto ? (detail::max(0, exponent - max_digits_63)) : digits - max_digits_63;
+
+            if (opt.width > 0)
+                opt.width = detail::max(1, opt.width - (point + zeros));
+
+            if (exponent >= max_digits_63)
+            {
+                double tmp = value*powi<double>(opt.radix, max_digits_63-exponent);
+                positional_impl<int64_t>(ctx, tmp, max_digits_63, opt, max_digits_63, true);
+            }
+            else
+                positional_impl<int64_t>(ctx, value, exponent, opt, max_digits_63, is_auto);
+
+            if (exponent > max_digits_63)
+                put(ctx.out(), exponent - max_digits_63, options.digits[0]);
+            if (!is_auto && options.precision > 0)
+            {
+                put(ctx.out(), 1, '.');
+                put(ctx.out(), options.precision, options.digits[0]);
+            }
+        }
+    }
+
+    template <typename Context, typename Exp = int>
+    static void scientific(Context &ctx, T value, int exponent, const format_options<T> &options, bool is_auto)
+    {
+        if (options.width > 0)
+        {
+            auto tmp_opt = options;
+            tmp_opt.width = 0;
+            int precision = options.precision >= 0 ? options.precision : 6;
+            const size_t tmp_n = precision + 8;
+            auto buf_lease = ctx.get_tmp_buffer(tmp_n);
+            char_buf<char> tmp(buf_lease.get(), tmp_n);
+            output_context<char_buf<char>&> tmp_ctx(tmp);
+            scientific(tmp_ctx, value, exponent, tmp_opt, is_auto);
+            print(ctx, c_str(tmp), string_length(tmp), options.width);
+        }
+        else
+        {
+            auto tmp = value*powi(options.radix,-exponent);
+            if (std::abs(tmp) < 1)
+                tmp = std::copysign(1, value);
+            positional(ctx, tmp, 0, options, is_auto);
+            put(ctx.out(), options.uppercase ? "E" : "e");
+            format_options<Exp> opt;
+            opt.leading_sign = '+';
+            formatter<Exp>().format(ctx, exponent, opt);
+        }
+    }
+    template <typename Context>
+    static void binary_repr(Context &ctx, const T &value, const format_options<T> &options)
+    {
+    }
+
+    static int exponent(T value, uint8_t radix)
+    {
+        int bin_exp;
+        switch (radix)
+        {
+        case 2:
+            std::frexp(value, &bin_exp);
+            return bin_exp;
+        case 8:
+            std::frexp(value, &bin_exp);
+            return bin_exp < 0 ? (bin_exp - 2)/3 : bin_exp/3;
+        case 10:
+            return std::floor(std::log10(std::abs(value)));
+        case 16:
+            std::frexp(value, &bin_exp);
+            return bin_exp >> 2;
+        default:
+            return std::floor(log(std::abs(value)) / log(radix));
+        }
+    }
+
+    template <typename Context>
+    static void print(Context &ctx, const char *value, int len, int width)
+    {
+        if (len < width)
+            put(ctx.out(), ' ', width - len);
+        put(ctx.out(), value, len);
+    }
+
 };
 
 template <typename StringLike>
