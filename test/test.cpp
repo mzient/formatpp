@@ -129,6 +129,26 @@ TEST(Formatter, Int)
     EXPECT_EQ(str, "+");
 }
 
+
+TEST(FormatFloat, Exponent)
+{
+    std::string str;
+    string_output_context ctx(str);
+    formatter<float> fmt;
+    EXPECT_EQ(fmt.exponent(0.09, 10), -2);
+    EXPECT_EQ(fmt.exponent(0.1, 10), -1);
+    EXPECT_EQ(fmt.exponent(1, 10), 0);
+    EXPECT_EQ(fmt.exponent(10, 10), 1);
+    EXPECT_EQ(fmt.exponent(10 - 1e-6f, 10), 0);
+    EXPECT_EQ(fmt.exponent(99, 10), 1);
+    EXPECT_EQ(fmt.exponent(100, 10), 2);
+    EXPECT_EQ(fmt.exponent(999, 10), 2);
+    EXPECT_EQ(fmt.exponent(1.1e+38, 10), 38);
+    EXPECT_EQ(fmt.exponent(0.99999e+14, 10), 13);
+    EXPECT_EQ(fmt.exponent(std::nextafter<float>(1e+14f, 0.0f), 10), 13);
+    EXPECT_EQ(fmt.exponent(std::nextafter<float>(1e+14f, 1e+15f), 10), 14);
+}
+
 TEST(Formatter, Float)
 {
     std::string str;
@@ -183,6 +203,21 @@ TEST(Formatter, Float)
     str = "";
     formatter<float>().format(ctx, 1.0f/999, "f");
     EXPECT_EQ(str, "0.001001");
+    str = "";
+    formatter<float>().format(ctx, 0, ".5f");
+    EXPECT_EQ(str, "0.00000");
+    str = "";
+    formatter<float>().format(ctx, 0, ".5e");
+    EXPECT_EQ(str, "0.00000e+0");
+    str = "";
+    formatter<double>().format(ctx, 1e+15-1, ".25f");
+    EXPECT_EQ(str, "999999999999999.0000000000000000000000000");
+    str = "";
+    formatter<double>().format(ctx, 1-1e-15, ".25f");
+    EXPECT_EQ(str.substr(0, 16), "0.99999999999999");
+    str = "";
+    formatter<double>().format(ctx, 1-1e-15, ".25g");
+    EXPECT_EQ(str.substr(0, 16), "0.99999999999999");
     str = "";
 }
 
@@ -352,7 +387,7 @@ TEST(Format, Perf)
         start = perf_clock::now();
         for (int i = 0; i < N; i++)
         {
-            (void)format_str("{} {} {}", i, 1.0f/i, strdata);
+            (void)format_str("{} {}", i, strdata);
         }
         end = perf_clock::now();
         time_format += end - start;
@@ -360,7 +395,7 @@ TEST(Format, Perf)
         for (int i = 0; i < N; i++)
         {
             char buf[64];
-            int n = snprintf(buf, 64, "%i %g %s", i, 1.0f/i, strdata);
+            int n = snprintf(buf, 64, "%i %s", i, strdata);
             (void)std::string(buf, n);
         }
         end = perf_clock::now();
@@ -370,7 +405,7 @@ TEST(Format, Perf)
         for (int i = 0; i < N; i++)
         {
             std::stringstream ss;
-            ss << i << " " << 1.0f/i << " " << strdata;
+            ss << i << " " << 1.0/i << " " << strdata;
             (void)ss.str();
         }
         end = perf_clock::now();

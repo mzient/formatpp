@@ -27,6 +27,266 @@ T min(const T &a, const T &b)
 }
 
 namespace {
+
+inline double ilog2(uint8_t radix) {
+    static constexpr double tab[] = { 0, 0,
+        1.0,
+        0.6309297535714575,
+        0.5,
+        0.43067655807339306,
+        0.38685280723454163,
+        0.3562071871080222,
+        0.3333333333333333,
+        0.31546487678572877,
+        0.3010299956639812,
+        0.2890648263178879,
+        0.27894294565112987,
+        0.27023815442731974,
+        0.26264953503719357,
+        0.2559580248098155,
+        0.25,
+        0.24465054211822604,
+        0.23981246656813146,
+        0.23540891336663824,
+        0.23137821315975915,
+        0.227670248696953,
+        0.22424382421757544,
+        0.22106472945750374,
+        0.21810429198553155,
+        0.21533827903669653,
+        0.21274605355336318,
+        0.2103099178571525,
+        0.20801459767650948,
+        0.20584683246043448,
+        0.2037950470905062,
+        0.20184908658209985,
+        0.2,
+        0.19823986317056053,
+        0.1965616322328226,
+        0.1949590218937863,
+        0.19342640361727081,
+        0.19195872000656014,
+        0.1905514124267734,
+        0.18920035951687003,
+        0.18790182470910757,
+        0.18665241123894338,
+        0.1854490234153689,
+        0.18428883314870617,
+        0.18316925091363362,
+        0.18208790046993825,
+        0.1810425967800402,
+        0.18003132665669264,
+        0.17905223175104137,
+        0.1781035935540111,
+        0.17718382013555792,
+        0.17629143438888212,
+        0.17542506358195453,
+        0.17458343004804494,
+        0.17376534287144002,
+        0.1729696904450771,
+        0.17219543379409813,
+        0.17144160057391347,
+        0.17070727966372012,
+        0.16999161628691403,
+        0.16929380759878143,
+        0.1686130986895011,
+        0.16794877895704194,
+        0.16730017881017412,
+        0.16666666666666666,
+        0.16604764621593782,
+        0.16544255391905832,
+        0.16485085672216038,
+        0.16427204996205025,
+        0.16370565544521565,
+        0.1631512196835108,
+        0.16260831227163416,
+        0.16207652439312228,
+        0.16155546744299637,
+        0.16104477175644444,
+        0.1605440854340214,
+        0.16005307325482135,
+        0.15957141566993818,
+        0.15909880786929415,
+        0.15863495891559604,
+        0.15817959093978226,
+        0.15773243839286438,
+        0.1572932473495469,
+        0.156861774859441,
+        0.15643778834207153,
+        0.15602106502222501,
+        0.15561139140249397,
+        0.15520856277015513,
+        0.1548123827357682,
+        0.15442266280111014,
+        0.15403922195426356,
+        0.15366188628986424,
+        0.15329048865267808,
+        0.15292486830283214,
+        0.15256487060115928,
+        0.15221034671324338,
+        0.15186115333086322,
+        0.1515171524096389,
+        0.15117821092177644,
+        0.15084420062289414,
+        0.1505149978319906,
+        0.15019048322368797,
+        0.14987054163194743,
+        0.14955506186451523,
+        0.14924393652741208,
+        0.14893706185882832,
+        0.148634337571835,
+        0.14833566670536175,
+        0.14804095548293264,
+        0.1477501131786861,
+        0.14746305199023912,
+        0.14717968691798522,
+        0.1468999356504447,
+        0.14662371845531105,
+        0.146350958075862,
+        0.14608157963242446,
+        0.14581551052860536,
+        0.14555268036201674,
+        0.14529302083924284,
+        0.14503646569481302,
+        0.14478295061395813,
+        0.14453241315894394,
+        0.1442847926987864,
+        0.1440400303421672,
+        0.14379806887337757,
+        0.14355885269113103,
+        0.14332232775009315,
+        0.14308844150498737,
+        0.14285714285714285,
+        0.14262838210336,
+        0.14240211088697471,
+        0.14217828215101067,
+        0.14195685009331532,
+        0.1417377701235801,
+        0.14152099882215266,
+        0.14130649390055278,
+        0.14109421416360957,
+        0.1408841194731412,
+        0.14067617071310393,
+        0.14047032975614,
+        0.14026655943145866,
+        0.14006482349398794,
+        0.13986508659473787,
+        0.1396673142523192,
+        0.13947147282556493,
+        0.13927752948720412,
+        0.1390854521985406,
+        0.13889520968509134,
+        0.13870677141314172,
+        0.13852010756717748,
+        0.13833518902815395,
+        0.1381519873525671,
+        0.13797047475229052,
+        0.13779062407514628,
+        0.1376124087861776,
+        0.13743580294959373,
+        0.13726078121135893,
+        0.13708731878239783,
+        0.13691539142239212,
+        0.1367449754241439,
+        0.13657604759848213,
+        0.13640858525969024,
+        0.13624256621143366,
+        0.13607796873316694,
+        0.13591477156700138,
+        0.13575295390501496,
+        0.13559249537698637,
+        0.13543337603853725,
+        0.13527557635966633,
+        0.13511907721365987,
+        0.1349638598663645,
+        0.13480990596580797,
+        0.13465719753215485,
+        0.13450571694798438,
+        0.13435544694887797,
+        0.13420637061430538,
+        0.13405847135879795,
+        0.13391173292339814,
+        0.13376613936737558,
+        0.13362167506019965,
+        0.13347832467375914,
+        0.13333607317482013,
+        0.13319490581771357,
+        0.13305480813724413,
+        0.13291576594181265,
+        0.13277776530674432,
+        0.13264079256781566,
+        0.13250483431497315,
+        0.13236987738623676,
+        0.1322359088617821,
+        0.13210291605819502,
+        0.1319708865228925,
+        0.13183980802870454,
+        0.13170966856861138,
+        0.13158045635063056,
+        0.13145215979284927,
+        0.13132476751859679,
+        0.13119826835175236,
+        0.13107265131218435,
+        0.13094790561131578,
+        0.13082402064781276,
+        0.13070098600339125,
+        0.13057879143873863,
+        0.1304574268895465,
+        0.13033688246265052,
+        0.13021714843227464,
+        0.13009821523637602,
+        0.12998007347308715,
+        0.12986271389725298,
+        0.12974612741705907,
+        0.1296303050907487,
+        0.1295152381234257,
+        0.12940091786394073,
+        0.12928733580185806,
+        0.12917448356450073,
+        0.12906235291407148,
+        0.1289509357448472,
+        0.1288402240804449,
+        0.12873021007115668,
+        0.12862088599135182,
+        0.1285122442369443,
+        0.1284042773229231,
+        0.12829697788094419,
+        0.1281903386569819,
+        0.12808435250903813,
+        0.12797901240490775,
+        0.12787431141999844,
+        0.12777024273520352,
+        0.12766679963482608,
+        0.1275639755045533,
+        0.12746176382947913,
+        0.12736015819217406,
+        0.127259152270801,
+        0.12715873983727546,
+        0.12705891475546918,
+        0.1269596709794558,
+        0.12686100255179733,
+        0.12676290360187092,
+        0.1266653683442337,
+        0.1265683910770258,
+        0.12647196618040968,
+        0.1263760881150453,
+        0.12628075142059988,
+        0.12618595071429148,
+        0.12609168068946533,
+        0.1259979361142023,
+        0.1259047118299582,
+        0.12581200275023383,
+        0.12571980385927414,
+        0.12562811021079626,
+        0.1255369169267456,
+        0.1254462191960791,
+        0.12535601227357512,
+        0.12526629147866908,
+        0.12517705219431446,
+    };
+    return tab[radix];
+}
+
 constexpr int max_digits_31[256] = {
 0, 0, 31, 19, 15, 13, 11, 11, 10, 9, 9, 8, 8, 8, 8, 7, 7, 7, 7, 7, 7, 7, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
 6, 6, 6, 6, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
@@ -68,7 +328,7 @@ inline int max_precision<double>(uint8_t radix) noexcept
     case 16:
         return 13;
     default:
-        return 53 / std::log2(radix);
+        return 53 * ilog2(radix);
     }
 }
 template<>
@@ -86,7 +346,7 @@ inline int max_precision<float>(uint8_t radix) noexcept
     case 16:
         return 6;
     default:
-        return 23 / std::log2(radix);
+        return 23 * ilog2(radix);
     }
 }
 
@@ -905,10 +1165,11 @@ struct default_formatter<T, IntegralType>
 
 private:
     template <uint8_t static_radix>
-    static void write_fixed(char *rbuf, typename std::make_unsigned<T>::type x, int &n,
+    static void write_fixed(char *rbuf, typename std::make_unsigned<T>::type x, int &_n,
                             uint8_t dynamic_radix, const char *digits,
-                            int fixed_point, bool &trim_trailing_zeros)
+                            int fixed_point, bool trim_trailing_zeros)
     {
+        int n = _n;
         const unsigned radix = static_radix ? static_radix : dynamic_radix;
         int trimmed = 0;
         while (n + trimmed < fixed_point)
@@ -931,6 +1192,7 @@ private:
             x /= radix;
             rbuf[-++n] = digits[digit];
         }
+        _n = n;
     }
 };
 
@@ -997,12 +1259,12 @@ struct default_formatter<T, FloatingPointType>
 
         int e = exponent(value, options.radix);
         int precision = options.precision >= 0 ? options.precision : 6;
-        T m = powi(options.radix, fractional_digits ? precision : precision-e-1);
-        T sig, rem;
-        rem = std::modf(value*m, &sig);
-        if (rem > 0.5)
-            sig++;
-        value = sig / m;
+        T m = powi(options.radix, fractional_digits ? -precision : e+1-precision);
+        T rem = std::fmod(value, m);
+        if (rem > m*T(0.5))
+        {
+            value = std::nextafter(value + m -rem, value + m);
+        }
         if (value >= powi(options.radix, e+1))
             e++;
 
@@ -1042,14 +1304,17 @@ struct default_formatter<T, FloatingPointType>
         std::tie(value, e) = round_value(value, options, false);
         scientific(ctx, value, e, options, false);
     }
+
     template <typename U = T>
-    static U powi(unsigned base, int e) {
+    static U powi(uint8_t base, int e)
+    {
         if (e < 0)
             return 1.0 / powi<U>(base, -e);
 
         U result = 1;
         U tmp = base;
-        while (e > 0) {
+        while (e > 0)
+        {
             if (e&1)
                 result *= tmp;
             tmp *= tmp;
@@ -1074,6 +1339,94 @@ struct default_formatter<T, FloatingPointType>
     }
 
     template <typename Context>
+    static void positional_impl_l(Context &ctx, long double value, int exponent, const format_options<T> &options, int digits, bool is_auto)
+    {
+        auto buf_lease = ctx.get_tmp_buffer(digits + 2);
+        char *buf = buf_lease.get();
+        int precision = options.precision ? options.precision : 6;
+        long double epsilon = is_auto ? powi<long double>(options.radix, exponent-digits)
+                                      : powi<long double>(options.radix, -precision);
+        long double v = std::fabs(value) * powi<long double>(options.radix, -exponent);
+        if (v < 1) v = 1;
+        else if (v >= options.radix) v = std::nextafter((long double)options.radix, 0);
+
+        int i = 0;
+        int n = exponent > 0 ? exponent : 1;
+        if (value < 0)
+            buf[i++] = '-';
+        else if (options.leading_sign)
+            buf[i++] = '+';
+        int e;
+        for (e = exponent; e >= 0 && value; e--)
+        {
+            auto p = powi<long double>(options.radix, e);
+            int d = (int)(value / p);
+            value -= d * p;
+            if (value < 0)
+                value = 0;
+            else if (value >= p)
+                value = std::nextafter(p, 0);
+            buf[i++] = options.digits[d];
+        }
+        for (; e >= 0; e--)
+            buf[i++] = options.digits[0];
+        if (!i || buf[i-1] == '-' || buf[i-1] == '+')
+            buf[i++] = options.digits[0];
+
+        if (is_auto)
+        {
+            if (digits > n)
+            {
+                epsilon = powi<long double>(options.radix, i-digits);
+                bool first = true;
+                while (value > epsilon && n < digits)
+                {
+                    if (first)
+                    {
+                        buf[i++] = '.';
+                        first = false;
+                    }
+                    value *= options.radix;
+                    int d = (int)value;
+                    value -= d;
+                    if (value < 0)
+                    {
+                        value = 0;
+                        d++;
+                    }
+                    buf[i++] = options.digits[d];
+                    epsilon *= options.radix;
+                    n++;
+                }
+            }
+        }
+        else
+        {
+            if (precision > 0)
+            {
+                buf[i++] = '.';
+                for (int j = 0; j < precision; j++)
+                {
+                    value *= options.radix;
+                    int d = (int)value;
+                    value -= d;
+                    if (value < 0)
+                    {
+                        value = 0;
+                        d++;
+                    }
+                    buf[i++] = options.digits[d];
+                }
+            }
+        }
+        buf[i++] = 0;
+        if (i < options.width)
+        {
+            put(ctx.out(), options.width - i, ' ');
+        }
+        put(ctx.out(), buf, i);
+    }
+    template <typename Context>
     static void positional(Context &ctx, T value, int exponent, const format_options<T> &options, bool is_auto)
     {
         int precision = options.precision >= 0 ? options.precision : 6;
@@ -1083,34 +1436,11 @@ struct default_formatter<T, FloatingPointType>
         const int max_digits_31 = detail::max_digits_31[options.radix];
         const int max_digits_63 = detail::max_digits_63[options.radix];
         if (digits <= max_digits_31)
-            positional_impl<int>(ctx, value, exponent, options, digits, is_auto);
+            positional_impl<int32_t>(ctx, value, exponent, options, digits, is_auto);
         else if (digits <= max_digits_63)
             positional_impl<int64_t>(ctx, value, exponent, options, digits, is_auto);
         else
-        {
-            auto opt = options;
-            int point = exponent < max_digits_63 || (!is_auto && options.precision > 0);
-            int zeros = is_auto ? (detail::max(0, exponent - max_digits_63)) : digits - max_digits_63;
-
-            if (opt.width > 0)
-                opt.width = detail::max(1, opt.width - (point + zeros));
-
-            if (exponent >= max_digits_63)
-            {
-                double tmp = value*powi<double>(opt.radix, max_digits_63-exponent);
-                positional_impl<int64_t>(ctx, tmp, max_digits_63, opt, max_digits_63, true);
-            }
-            else
-                positional_impl<int64_t>(ctx, value, exponent, opt, max_digits_63, is_auto);
-
-            if (exponent > max_digits_63)
-                put(ctx.out(), exponent - max_digits_63, options.digits[0]);
-            if (!is_auto && options.precision > 0)
-            {
-                put(ctx.out(), 1, '.');
-                put(ctx.out(), options.precision, options.digits[0]);
-            }
-        }
+            positional_impl_l(ctx, (long double)value, exponent, options, digits, is_auto);
     }
 
     template <typename Context, typename Exp = int>
@@ -1130,14 +1460,19 @@ struct default_formatter<T, FloatingPointType>
         }
         else
         {
-            auto tmp = value*powi(options.radix,-exponent);
-            if (std::abs(tmp) < 1)
-                tmp = std::copysign(1, value);
-            positional(ctx, tmp, 0, options, is_auto);
-            put(ctx.out(), options.uppercase ? "E" : "e");
-            format_options<Exp> opt;
-            opt.leading_sign = '+';
-            formatter<Exp>().format(ctx, exponent, opt);
+            if (value == 0) {
+                positional(ctx, 0, 0, options, is_auto);
+                put(ctx.out(), options.uppercase ? "E+0" : "e+0");
+            } else {
+                auto tmp = value*powi(options.radix,-exponent);
+                if (std::abs(tmp) < 1)
+                    tmp = std::copysign(1, value);
+                positional(ctx, tmp, 0, options, is_auto);
+                put(ctx.out(), options.uppercase ? "E" : "e");
+                format_options<Exp> opt;
+                opt.leading_sign = '+';
+                formatter<Exp>().format(ctx, exponent, opt);
+            }
         }
     }
     template <typename Context>
@@ -1147,6 +1482,8 @@ struct default_formatter<T, FloatingPointType>
 
     static int exponent(T value, uint8_t radix)
     {
+        if (!value)
+            return INT_MIN;
         int bin_exp;
         switch (radix)
         {
@@ -1156,14 +1493,37 @@ struct default_formatter<T, FloatingPointType>
         case 8:
             std::frexp(value, &bin_exp);
             return bin_exp < 0 ? (bin_exp - 2)/3 : bin_exp/3;
-        case 10:
-            return std::floor(std::log10(std::abs(value)));
         case 16:
             std::frexp(value, &bin_exp);
             return bin_exp >> 2;
         default:
-            return std::floor(log(std::abs(value)) / log(radix));
+            break;
         }
+
+        std::frexp(value, &bin_exp);
+        //bin_exp = fpexp(value);
+        int e = bin_exp * detail::ilog2(radix);
+        //int e = std::floor(std::log2(std::abs(value)) * detail::ilog2(radix));
+        T m = powi(radix, e);
+        if (value < m)
+        {
+            do
+            {
+                e--;
+                m /= radix;
+            } while (value < m);
+        }
+        else if (value >= m * radix)
+        {
+            m *= radix;
+            do
+            {
+                e++;
+                m *= radix;
+            }
+            while (value > m);
+        }
+        return e;
     }
 
     template <typename Context>
