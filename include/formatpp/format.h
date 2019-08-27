@@ -28,7 +28,8 @@ T min(const T &a, const T &b)
 
 namespace {
 
-inline double ilog2(uint8_t radix) {
+inline double ilog2(uint8_t radix)
+{
     static constexpr double tab[] = { 0, 0,
         1.0,
         0.6309297535714575,
@@ -316,7 +317,8 @@ int max_precision(uint8_t radix) noexcept;
 template<>
 inline int max_precision<double>(uint8_t radix) noexcept
 {
-    switch (radix) {
+    switch (radix)
+    {
     case 2:
         return 53;
     case 4:
@@ -334,7 +336,8 @@ inline int max_precision<double>(uint8_t radix) noexcept
 template<>
 inline int max_precision<float>(uint8_t radix) noexcept
 {
-    switch (radix) {
+    switch (radix)
+    {
     case 2:
         return 23;
     case 4:
@@ -1199,10 +1202,13 @@ private:
 template <typename T>
 struct default_formatter<T, FloatingPointType>
 {
-    static T lo(T value, T eps) {
+    static T lo(T value, T eps)
+    {
         return std::floor(value / eps) * eps;
     }
-    static T hi(T value, T eps) {
+
+    static T hi(T value, T eps)
+    {
         return std::ceil(value / eps) * eps;
     }
 
@@ -1433,11 +1439,9 @@ struct default_formatter<T, FloatingPointType>
 
         int digits = is_auto ? precision : std::max(exponent, 0) + precision + 1;
 
-        const int max_digits_31 = detail::max_digits_31[options.radix];
-        const int max_digits_63 = detail::max_digits_63[options.radix];
-        if (digits <= max_digits_31)
+        if (digits <= detail::max_digits_31[options.radix])
             positional_impl<int32_t>(ctx, value, exponent, options, digits, is_auto);
-        else if (digits <= max_digits_63)
+        else if (digits <= detail::max_digits_63[options.radix])
             positional_impl<int64_t>(ctx, value, exponent, options, digits, is_auto);
         else
             positional_impl_l(ctx, (long double)value, exponent, options, digits, is_auto);
@@ -1460,10 +1464,13 @@ struct default_formatter<T, FloatingPointType>
         }
         else
         {
-            if (value == 0) {
+            if (value == 0)
+            {
                 positional(ctx, 0, 0, options, is_auto);
                 put(ctx.out(), options.uppercase ? "E+0" : "e+0");
-            } else {
+            }
+            else
+            {
                 auto tmp = value*powi(options.radix,-exponent);
                 if (std::abs(tmp) < 1)
                     tmp = std::copysign(1, value);

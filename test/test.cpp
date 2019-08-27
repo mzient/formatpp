@@ -129,6 +129,28 @@ TEST(Formatter, Int)
     EXPECT_EQ(str, "+");
 }
 
+TEST(Formatter, IntLimits)
+{
+    std::string str;
+    string_output_context ctx(str);
+    formatter<int8_t>().format(ctx, -128, "d");
+    EXPECT_EQ(str, "-128");
+    str = "";
+    formatter<int32_t>().format(ctx, 0x7fffffff, "d");
+    EXPECT_EQ(str, "2147483647");
+    str = "";
+    formatter<int32_t>().format(ctx, -0x7fffffff-1, "d");
+    EXPECT_EQ(str, "-2147483648");
+    str = "";
+    formatter<uint32_t>().format(ctx, 0xffffffff, "d");
+    EXPECT_EQ(str, "4294967295");
+    str = "";
+    formatter<int64_t>().format(ctx, std::numeric_limits<int64_t>::max(), "d");
+    EXPECT_EQ(str, "9223372036854775807");
+    str = "";
+    formatter<int64_t>().format(ctx, std::numeric_limits<int64_t>::min(), "d");
+    EXPECT_EQ(str, "-9223372036854775808");
+}
 
 TEST(FormatFloat, Exponent)
 {
