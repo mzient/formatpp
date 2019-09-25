@@ -220,6 +220,12 @@ TEST(Formatter, Float)
     formatter<float>().format(ctx, 1.9999f, ".3E");
     EXPECT_EQ(str, "2.000E+0");
     str = "";
+    formatter<float>().format(ctx, 0, ".0E");
+    EXPECT_EQ(str, "0E+0");
+    str = "";
+    formatter<float>().format(ctx, 10, ".0E");
+    EXPECT_EQ(str, "1E+1");
+    str = "";
     formatter<float>().format(ctx, 1.0f/999, "");
     EXPECT_EQ(str, "0.001001");
     str = "";
@@ -240,6 +246,57 @@ TEST(Formatter, Float)
     str = "";
     formatter<double>().format(ctx, 1-1e-15, ".25g");
     EXPECT_EQ(str.substr(0, 16), "0.99999999999999");
+    str = "";
+}
+
+TEST(Formatter, Float_Inf)
+{
+    std::string str;
+    string_output_context ctx(str);
+    formatter<float>().format(ctx, std::numeric_limits<float>::infinity(), "f");
+    EXPECT_EQ(str, "inf");
+    str = "";
+    formatter<float>().format(ctx, std::numeric_limits<float>::infinity(), "+5f");
+    EXPECT_EQ(str, " +inf");
+    str = "";
+    formatter<float>().format(ctx, -std::numeric_limits<float>::infinity(), "6g");
+    EXPECT_EQ(str, "  -inf");
+    str = "";
+    formatter<float>().format(ctx, std::numeric_limits<float>::quiet_NaN(), "");
+    EXPECT_EQ(str, "nan");
+    str = "";
+    formatter<float>().format(ctx, std::numeric_limits<float>::quiet_NaN(), "7E");
+    EXPECT_EQ(str, "    nan");
+    str = "";
+}
+
+TEST(Formatter, Float_Repr)
+{
+    std::string str;
+    string_output_context ctx(str);
+    formatter<float>().format(ctx, 123.79817962646484375, "x");
+    EXPECT_EQ(str, "42f798ab");
+    str = "";
+    formatter<double>().format(ctx, 1.234567890123, "X");
+    EXPECT_EQ(str, "3FF3C0CA428C51F2");
+    str = "";
+    formatter<float>().format(ctx, -1, "X");
+    EXPECT_EQ(str, "BF800000");
+    str = "";
+    formatter<float>().format(ctx, std::numeric_limits<float>::infinity(), "10X");
+    EXPECT_EQ(str, "  7F800000");
+    str = "";
+}
+
+TEST(Formatter, Float_BinHex)
+{
+    std::string str;
+    string_output_context ctx(str);
+    formatter<float>().format(ctx, 16.828125, "af");
+    EXPECT_EQ(str, "10.d40000");
+    str = "";
+    formatter<float>().format(ctx, 16.828125, ".15bg");
+    EXPECT_EQ(str, "10000.110101");
     str = "";
 }
 
@@ -409,7 +466,7 @@ TEST(Format, Perf)
         start = perf_clock::now();
         for (int i = 0; i < N; i++)
         {
-            (void)format_str("{} {}", i, strdata);
+            (void)format_str("{} {} {}", i, 1.0/(i+1), strdata);
         }
         end = perf_clock::now();
         time_format += end - start;
@@ -417,7 +474,7 @@ TEST(Format, Perf)
         for (int i = 0; i < N; i++)
         {
             char buf[64];
-            int n = snprintf(buf, 64, "%i %s", i, strdata);
+            int n = snprintf(buf, 64, "%i %g %s", i, 1.0/(i+1), strdata);
             (void)std::string(buf, n);
         }
         end = perf_clock::now();

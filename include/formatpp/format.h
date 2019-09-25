@@ -309,7 +309,7 @@ constexpr int max_digits_63[256] = {
 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8,
 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
 };
-} // {}
+}
 
 template <typename T>
 int max_precision(uint8_t radix) noexcept;
@@ -663,6 +663,8 @@ struct fp_format_options
         case 'G':
         case 'e':
         case 'E':
+        case 'x':
+        case 'X':
             break;
         case '\0':
             return;
@@ -1096,8 +1098,25 @@ struct default_formatter<T, CharType>
 };
 
 template <typename T>
+inline T divmod(uint8_t &mod, T x, uint8_t radix)
+{
+    mod = x % radix;
+    return x / radix;
+}
+
+template <typename T, uint8_t radix>
+T divmod(uint8_t &mod, T x, std::integral_constant<uint8_t, radix>)
+{
+    mod = x % radix;
+    return x / radix;
+}
+
+template <typename T>
 struct default_formatter<T, IntegralType>
 {
+    template <uint8_t r>
+    using static_radix = std::integral_constant<uint8_t, r>;
+
     template <typename Context>
     static void format(Context &ctx, const T &value, const format_options<T> &options)
     {
@@ -1129,22 +1148,29 @@ struct default_formatter<T, IntegralType>
             x = value;
         }
 
+        const char *digits = options.digits;
+        auto lookup_digit = [digits](int d) { return digits[d]; };
+        auto ascii_digit = [](int d) { return '0' + d; };
+
         switch (options.radix)
         {
         case 2:
-            write_fixed<2>(rbuf, x, n, options.radix, options.digits, fixed_point, trim_trailing_zeros);
+            write_fixed(rbuf, x, n, static_radix<2>(), ascii_digit, fixed_point, trim_trailing_zeros);
             break;
         case 8:
-            write_fixed<8>(rbuf, x, n, options.radix, options.digits, fixed_point, trim_trailing_zeros);
+            write_fixed(rbuf, x, n, static_radix<8>(), ascii_digit, fixed_point, trim_trailing_zeros);
             break;
-        case 10:  // use compiler's optimization for division by 10
-            write_fixed<10>(rbuf, x, n, options.radix, options.digits, fixed_point, trim_trailing_zeros);
+        case 10:
+            write_fixed(rbuf, x, n, static_radix<10>(), ascii_digit, fixed_point, trim_trailing_zeros);
             break;
         case 16:
-            write_fixed<16>(rbuf, x, n, options.radix, options.digits, fixed_point, trim_trailing_zeros);
+            write_fixed(rbuf, x, n, static_radix<16>(), lookup_digit, fixed_point, trim_trailing_zeros);
             break;
         default:
-            write_fixed<0>(rbuf, x, n, options.radix, options.digits, fixed_point, trim_trailing_zeros);
+            if (options.radix <= 10)
+                write_fixed(rbuf, x, n, options.radix, ascii_digit, fixed_point, trim_trailing_zeros);
+            else
+                write_fixed(rbuf, x, n, options.radix, lookup_digit, fixed_point, trim_trailing_zeros);
             break;
         }
 
@@ -1163,37 +1189,36 @@ struct default_formatter<T, IntegralType>
             rbuf[-++n] = options.leading_sign;
         while (n < options.width)
             rbuf[-++n] = ' ';
-        put(ctx.out(), rbuf-n);
+        put(ctx.out(), rbuf-n, n);
     }
 
 private:
-    template <uint8_t static_radix>
+    template <typename radix_type, typename get_digit_fn>
     static void write_fixed(char *rbuf, typename std::make_unsigned<T>::type x, int &_n,
-                            uint8_t dynamic_radix, const char *digits,
+                            radix_type radix, get_digit_fn get_digit,
                             int fixed_point, bool trim_trailing_zeros)
     {
         int n = _n;
-        const unsigned radix = static_radix ? static_radix : dynamic_radix;
         int trimmed = 0;
         while (n + trimmed < fixed_point)
         {
-            unsigned digit = x % radix;
+            uint8_t digit;
+            x = divmod(digit, x, radix);
             if (digit || !trim_trailing_zeros)
             {
-                rbuf[-++n] = digits[digit];
+                rbuf[-++n] = get_digit(digit);
                 trim_trailing_zeros = false;
             }
             else
                 trimmed++;
-            x /= radix;
         }
         if (fixed_point > 0 && !trim_trailing_zeros)
             rbuf[-++n] = '.';
         while (x)
         {
-            unsigned digit = x % radix;
-            x /= radix;
-            rbuf[-++n] = digits[digit];
+            uint8_t digit;
+            x = divmod(digit, x, radix);
+            rbuf[-++n] = get_digit(digit);
         }
         _n = n;
     }
@@ -1240,14 +1265,14 @@ struct default_formatter<T, FloatingPointType>
             int l = value < 0 || options.leading_sign ? 4 : 3;
             const char *symbol = value < 0 ? "-inf" : options.leading_sign ? "+inf" : "inf";
             if (options.width > l)
-                put(ctx.out(), ' ', options.width - l);
+                put(ctx.out(), options.width - l, ' ');
             put(ctx.out(), symbol, l);
             return true;
         }
         else if (std::isnan(value))
         {
             if (options.width > 3)
-                put(ctx.out(), ' ', options.width - 3);
+                put(ctx.out(), options.width - 3, ' ');
             put(ctx.out(), "nan");
             return true;
         }
@@ -1352,9 +1377,6 @@ struct default_formatter<T, FloatingPointType>
         int precision = options.precision ? options.precision : 6;
         long double epsilon = is_auto ? powi<long double>(options.radix, exponent-digits)
                                       : powi<long double>(options.radix, -precision);
-        long double v = std::fabs(value) * powi<long double>(options.radix, -exponent);
-        if (v < 1) v = 1;
-        else if (v >= options.radix) v = std::nextafter((long double)options.radix, 0);
 
         int i = 0;
         int n = exponent > 0 ? exponent : 1;
@@ -1482,9 +1504,33 @@ struct default_formatter<T, FloatingPointType>
             }
         }
     }
+
     template <typename Context>
     static void binary_repr(Context &ctx, const T &value, const format_options<T> &options)
     {
+        static const int32_t endian_test = 1;
+        static const bool little_endian = *(const char *)&endian_test == 1;
+        const uint8_t *raw = reinterpret_cast<const uint8_t*>(&value);
+        int leading_chars = options.width - 2*sizeof(T);
+        if (leading_chars > 0)
+            put(ctx.out(), leading_chars, ' ');
+        char buf[2*sizeof(T)+1];
+        int n = 0;
+        auto put_hex = [&](uint8_t byte) {
+            buf[n++] = options.digits[byte>>4];
+            buf[n++] = options.digits[byte&15];
+        };
+        if (little_endian) {
+            for (int i = sizeof(T)-1; i >= 0; i--) {
+                put_hex(raw[i]);
+            }
+        } else {
+            for (int i = 0; i < (int)sizeof(T); i++) {
+                put_hex(raw[i]);
+            }
+        }
+        buf[n++] = 0;
+        put(ctx.out(), buf, n);
     }
 
     static int exponent(T value, uint8_t radix)
