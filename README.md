@@ -4,7 +4,7 @@ A C++ library replacing `printf`.
 
 ## Main features
 
-* **Small** - Core library is ~ 1000 LoC
+* **Small** - Core library is < 2000 LoC
 
 * **Header-only** - No link-time dependencies, symbol import/export, etc.
 
@@ -24,3 +24,9 @@ print("{0:1.5g}", 1.5)   =>  1.5`
 print("{0:.5e}", 1500.f) =>  1.50000e+3
 ```
 
+* **Can print floating point numbers in hex and binary**
+```
+print("{af}", 16.25)      => 10.40000 // hex float, fixed (f)
+print("{bg}", 1.125)      => 1.001    // binary float, automatic (g)
+print("{x}, 1.0f)         => 3f800000 // IEEE754 representation
+```
